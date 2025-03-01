@@ -1,0 +1,46 @@
+name: CI/CD Pipeline to EC2 with Docker and Ansible
+
+on:
+  push:
+    branches:
+      - main  # Trigger the workflow on push to the main branch
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Log in to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build Docker image
+      run: |
+        docker build -t my-app .
+
+    - name: Tag Docker image
+      run: |
+        docker tag my-app:latest YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/your-ecr-repository:latest
+
+    - name: Push Docker image to Amazon ECR
+      run: |
+        docker push YOUR_ACCOUNT_ID.dkr.ecr.YOUR_REGION.amazonaws.com/your-ecr-repository:latest
+
+    - name: Set up SSH for Ansible
+      run: |
+        echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > private_key.pem
+        chmod 600 private_key.pem
+      env:
+        EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+
+    - name: Deploy to EC2 via Ansible
+      run: |
+        ansible-playbook -i "${{ secrets.EC2_PUBLIC_IP }}," --private-key private_key.pem ansible-playbook.yml
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
