@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  # EC2 Instance Security Group
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and HTTP
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'  # Allow SSH access from anywhere (not recommended for production)
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: '0.0.0.0/0'  # Allow HTTP access from anywhere
+
+  # EC2 Instance Role (IAM role)
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EC2AccessECRPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetRepositoryPolicy
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - ecr:GetDownloadUrlForLayer
+                Resource: arn:aws:ecr:eu-west-1a:717279715623:repository/deploynetwork #Added account ID and ECr repository
+
+  # EC2 Instance
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: amzn2-ami-hvm-x86_64-gp2  # Replace with the appropriate AMI ID for your region
+      KeyName: Trial  # Replace with your EC2 key pair name
+      SecurityGroups:
+        - Ref: EC2SecurityGroup
+      IamInstanceProfile:
+        Ref: EC2InstanceRole
+
+Outputs:
+  InstanceId:
+    Description: "Instance ID"
+    Value: !Ref EC2Instance
+  PublicIP:
+    Description: "Public IP of the EC2 instance"
+    Value: !GetAtt EC2Instance.PublicIp
