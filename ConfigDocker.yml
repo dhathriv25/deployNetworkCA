@@ -1,60 +1,35 @@
 ---
-- name: Provision EC2 instance and deploy Docker container
-  hosts: ec2
+- name: Install and Configure Docker on EC2
+  hosts: webserver
   become: yes
-  vars:
-    region: eu-west-1a  # Set your region
-    ecr_repository: eploynetwork  # Your ECR repository name
-    ecr_image_tag: latest  # Image tag
-    docker_image: "{{ ecr_repository }}:{{ ecr_image_tag }}"
-    instance_public_ip: "your-ec2-public-ip"  # Public IP of your EC2 instance
-    aws_access_key: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"  # AWS Access Key (stored as env variable)
-    aws_secret_key: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"  # AWS Secret Key (stored as env variable)
-  
   tasks:
-    - name: Install Docker on EC2 instance
-      amazon.aws.aws_ami:
-        name: "docker"
-        state: present
-      become: true
+    - name: Clean YUM cache
+      command: yum clean all
 
-    - name: Install dependencies for AWS CLI and Docker
-      package:
-        name:
-          - aws-cli
-          - docker
-        state: present
-      become: true
+    - name: Update all installed packages
+      command: yum -y update
 
-    - name: Start Docker service
-      service:
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
+
+    - name: Start and Enable Docker Service
+      systemd:
         name: docker
         state: started
-        enabled: true
-      become: true
+        enabled: yes
 
-    - name: Log in to AWS ECR
-      shell: |
-        aws ecr get-login-password --region "{{ region }}" | docker login --username AWS --password-stdin "{{ aws_account_id }}.dkr.ecr.{{ region }}.amazonaws.com"
-      environment:
-        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
-        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+    - name: Add ec2-user to Docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
 
-    - name: Pull Docker image from ECR
-      shell: |
-        docker pull "{{ ecr_repository }}:{{ ecr_image_tag }}"
-      
-    - name: Stop and remove old container
-      docker_container:
-        name: my-app
-        state: absent
+    - name: Verify Docker Installation
+      shell: docker --version
+      register: docker_version
 
-    - name: Run Docker container
-      docker_container:
-        name: my-app
-        image: "{{ docker_image }}"
-        state: started
-        restart_policy: always
-        published_ports:
-          - "80:80"  # Exposing port 80
-
+    - name: Display Docker Version
+      debug:
+        msg: "{{ docker_version.stdout }}"
